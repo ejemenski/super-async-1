@@ -86,7 +86,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
             case CANCELLED:
                 throw new CancellationException();
         }
-        throw new IllegalStateException();
+        throw new IllegalStateException("cannot report in state WAITING");
     }
 
 
