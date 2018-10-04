@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
 
-    private static final int WAITING = 0, SET = 1, EXCEPTIONAL = 2, CANCELLED = 3, TIMEOUT = 4;
+    private static final int WAITING = 0, SET = 1, EXCEPTIONAL = 2, CANCELLED = 3;
 
     private final CountDownLatch countDownLatch = new CountDownLatch(1);
     private final AtomicInteger state = new AtomicInteger(WAITING);
@@ -69,8 +69,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
 
     @Override
     public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        countDownLatch.await(timeout, unit);
-        if (state.compareAndSet(WAITING, TIMEOUT)) {
+        if (!countDownLatch.await(timeout, unit)) {
             throw new TimeoutException();
         }
         return report();
@@ -86,7 +85,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
             case CANCELLED:
                 throw new CancellationException();
         }
-        throw new IllegalStateException("cannot report in state WAITING");
+        throw new IllegalStateException("cannot report in state WAITING" + state);
     }
 
 
@@ -123,9 +122,6 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
                     break;
                 case EXCEPTIONAL:
                     observer.onError((Throwable) result);
-                    break;
-                case TIMEOUT:
-                    observer.onError(new TimeoutException());
                     break;
             }
             wrapper.remove();

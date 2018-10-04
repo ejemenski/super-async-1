@@ -4,9 +4,7 @@ package org.superasync;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 public class SuperAsyncTest {
 
@@ -73,7 +71,7 @@ public class SuperAsyncTest {
     }
 
     @Test
-    public void retrySimple() throws ExecutionException, InterruptedException {
+    public void retrySimple() throws ExecutionException, InterruptedException, TimeoutException {
         Assert.assertEquals(Boolean.TRUE, SuperAsync.newInstance(Executors.newSingleThreadExecutor(), new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -87,7 +85,7 @@ public class SuperAsyncTest {
             public long check(Throwable e, int count) {
                 return count <= 2 ? 30 : DONT_RETRY;
             }
-        }).execute().get());
+        }).execute().get(1000, TimeUnit.MILLISECONDS));
     }
 
     private <T> SuperAsync<T> testInstance(Callable<T> callable) {
