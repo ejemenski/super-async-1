@@ -91,7 +91,8 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
         return observe(resultConsumer, errorConsumer, null);
     }
 
-    public Observation<V> observe(ResultConsumer<V> resultConsumer, ErrorConsumer errorConsumer, Executor observingExecutor) {
+    public Observation<V> observe(ResultConsumer<V> resultConsumer, ErrorConsumer errorConsumer,
+                                  Executor observingExecutor) {
         Observer<V> observer = new Observer<V>(
                 observingExecutor != null ? observingExecutor : ExecutorProviderStaticRef.getExecutorProvider().defaultObserving(),
                 resultConsumer,
@@ -115,7 +116,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
                     observer.onResult((V) stateHolder.getResult());
                     break;
                 case EXCEPTIONAL:
-                    observer.onError((Throwable) stateHolder.getException());
+                    observer.onError(stateHolder.getException());
                     break;
             }
             wrapper.remove();
@@ -135,37 +136,39 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
     }
 
     private static class StateHolder {
-        final static StateHolder WAITING = new StateHolder(SuperFuture.WAITING, null);
-        final static StateHolder CANCELLED = new StateHolder(SuperFuture.CANCELLED, null);
+        final static StateHolder WAITING = new StateHolder(SuperFuture.WAITING);
+        final static StateHolder CANCELLED = new StateHolder(SuperFuture.CANCELLED);
 
-        static StateHolder newResult(Object result) {
-            return new StateHolder(SET, result);
+        static StateHolder newResult(final Object result) {
+            return new StateHolder(SET) {
+                @Override
+                <V> V getResult() {
+                    //noinspection unchecked
+                    return (V) result;
+                }
+            };
         }
 
-        static StateHolder newExceptional(Throwable e) {
-            return new StateHolder(EXCEPTIONAL, e);
+        static StateHolder newExceptional(final Throwable e) {
+            return new StateHolder(EXCEPTIONAL) {
+                @Override
+                Throwable getException() {
+                    return e;
+                }
+            };
         }
 
-        private final Object outcome;
         private final int state;
 
-        private StateHolder(int state, Object outcome) {
+        private StateHolder(int state) {
             this.state = state;
-            this.outcome = outcome;
         }
 
         <V> V getResult() {
-            if (state == SET) {
-                //noinspection unchecked
-                return (V) outcome;
-            }
             return null;
         }
 
         Throwable getException() {
-            if (state == EXCEPTIONAL) {
-                return (Throwable) outcome;
-            }
             return null;
         }
     }
