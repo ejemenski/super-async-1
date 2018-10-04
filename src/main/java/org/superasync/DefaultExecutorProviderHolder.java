@@ -64,7 +64,7 @@ class DefaultExecutorProviderHolder {
         return DEFAULT_EXECUTOR_PROVIDER;
     }
 
-    private static class DecoratedRunnableScheduledFuture<T> extends Publisher<ErrorConsumer> implements RunnableScheduledFuture<T>,
+    private static class DecoratedRunnableScheduledFuture<T> extends IntPublisher<ErrorConsumer> implements RunnableScheduledFuture<T>,
             Completable.Cancellable.ErrorEmitting, Task {
 
         private final RunnableScheduledFuture<T> original;
@@ -92,12 +92,12 @@ class DefaultExecutorProviderHolder {
         @Override
         public void run() {
             original.run();
-            publishRevision(1);
+            publish(1);
         }
 
         @Override
-        void notifySubscriber(int revision, Wrapper wrapper) {
-            if (revision == 1) {
+        void notifySubscriber(Integer value, Wrapper wrapper) {
+            if (value == 1) {
                 try {
                     get();
                 } catch (ExecutionException e) {

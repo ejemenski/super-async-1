@@ -1,15 +1,12 @@
 package org.superasync;
 
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
 
     private static final int WAITING = 0, SET = 1, EXCEPTIONAL = 2, CANCELLED = 3;
 
     private final CountDownLatch countDownLatch = new CountDownLatch(1);
-    private final AtomicInteger state = new AtomicInteger(WAITING);
-    private Object result;
     private final PublisherInner publisher = new PublisherInner();
     private final Callback<V> callbackInterface = new CallbackInterface();
     private final org.superasync.Cancellable cancellationDelegate;
@@ -20,7 +17,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
-        if (state.compareAndSet(WAITING, CANCELLED)) {
+        if (publisher.compareAndPublish(StateHolder.WAITING, StateHolder.CANCELLED)) {
             done();
             cancellationDelegate.cancel(mayInterruptIfRunning);
             return true;
@@ -30,24 +27,22 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
 
     @Override
     public boolean isCancelled() {
-        return state.get() == CANCELLED;
+        return publisher.getValue().state == CANCELLED;
     }
 
     @Override
     public boolean isDone() {
-        return state.get() != WAITING;
+        return publisher.getValue().state != WAITING;
     }
 
     private void set(V value) {
-        if (state.compareAndSet(WAITING, SET)) {
-            this.result = value;
+        if (publisher.compareAndPublish(StateHolder.WAITING, StateHolder.newResult(value))) {
             done();
         }
     }
 
     private void setException(Throwable e) {
-        if (state.compareAndSet(WAITING, EXCEPTIONAL)) {
-            this.result = e;
+        if (publisher.compareAndPublish(StateHolder.WAITING, StateHolder.newExceptional(e))) {
             done();
         }
     }
@@ -58,7 +53,6 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
 
     private void done() {
         countDownLatch.countDown();
-        publisher.publishRevision(state.get());
     }
 
     @Override
@@ -76,16 +70,17 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
     }
 
     private V report() throws ExecutionException {
-        switch (state.get()) {
+        StateHolder stateHolder = publisher.getValue();
+        switch (stateHolder.state) {
             case SET:
                 //noinspection unchecked
-                return (V) result;
+                return (V) stateHolder.getResult();
             case EXCEPTIONAL:
-                throw new ExecutionException((Throwable) result);
+                throw new ExecutionException(stateHolder.getException());
             case CANCELLED:
                 throw new CancellationException();
         }
-        throw new IllegalStateException("cannot report in state WAITING" + state);
+        throw new IllegalStateException("cannot report in state WAITING");
     }
 
 
@@ -106,22 +101,22 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
         return new Observation<V>(w, this);
     }
 
-    private class PublisherInner extends Publisher<Observer<V>> {
+    private class PublisherInner extends TypedPublisher<StateHolder, Observer<V>> {
 
         PublisherInner() {
-            super(WAITING);
+            super(StateHolder.WAITING);
         }
 
         @Override
-        void notifySubscriber(int revision, Wrapper wrapper) {
+        void notifySubscriber(StateHolder stateHolder, Wrapper wrapper) {
             Observer<V> observer = wrapper.getObject();
-            switch (revision) {
+            switch (stateHolder.state) {
                 case SET:
                     //noinspection unchecked
-                    observer.onResult((V) result);
+                    observer.onResult((V) stateHolder.getResult());
                     break;
                 case EXCEPTIONAL:
-                    observer.onError((Throwable) result);
+                    observer.onError(stateHolder.getException());
                     break;
             }
             wrapper.remove();
@@ -137,6 +132,42 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
         @Override
         public void onError(Throwable e) {
             setException(e);
+        }
+    }
+
+    private static class StateHolder {
+        final static StateHolder WAITING = new StateHolder(SuperFuture.WAITING, null);
+        final static StateHolder CANCELLED = new StateHolder(SuperFuture.CANCELLED, null);
+
+        static StateHolder newResult(Object result) {
+            return new StateHolder(SET, result);
+        }
+
+        static StateHolder newExceptional(Throwable e) {
+            return new StateHolder(EXCEPTIONAL, e);
+        }
+
+        private final Object outcome;
+        private final int state;
+
+        private StateHolder(int state, Object outcome) {
+            this.state = state;
+            this.outcome = outcome;
+        }
+
+        <V> V getResult() {
+            if (state == SET) {
+                //noinspection unchecked
+                return (V) outcome;
+            }
+            return null;
+        }
+
+        Throwable getException() {
+            if (state == EXCEPTIONAL) {
+                return (Throwable) outcome;
+            }
+            return null;
         }
     }
 }

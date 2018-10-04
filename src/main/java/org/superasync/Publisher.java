@@ -2,32 +2,43 @@ package org.superasync;
 
 import java.util.Collection;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
-abstract class Publisher<S> {
-    private final AtomicInteger revision;
+abstract class Publisher<C, H, S> {
     final Collection<Wrapper> wrappers = new ConcurrentLinkedQueue<Wrapper>();
-    private final int initialRevision;
+    private final H holder;
+    final C initialValue;
 
-    Publisher(int initialRevision) {
-        revision = new AtomicInteger(initialRevision);
-        this.initialRevision = initialRevision;
+    Publisher(C initialValue) {
+        this.initialValue = initialValue;
+        this.holder = initHolder();
     }
 
-    boolean publishRevision(int revision) {
-        int old = this.revision.getAndSet(revision);
-        return onPublishRevision(old, revision);
+    abstract H initHolder();
+
+    abstract boolean compareAndSet(H holder, C expect, C newValue);
+
+    abstract C getAndSet(H holder, C value);
+
+    abstract C getValue(H holder);
+
+    C getValue() {
+        return getValue(holder);
     }
 
-    boolean compareAndPublishRevision(int expect, int revision) {
-        if (!this.revision.compareAndSet(expect, revision)) {
+    boolean publish(C value) {
+        C old = getAndSet(holder, value);
+        return onPublishRevision(old, value);
+    }
+
+    boolean compareAndPublish(C expect, C revision) {
+        if (!compareAndSet(holder, expect, revision)) {
             return false;
         }
 
         return onPublishRevision(expect, revision);
     }
 
-    private boolean onPublishRevision(int old, int revision) {
+    private boolean onPublishRevision(C old, C revision) {
         if (old != revision) {
             for (Wrapper w : wrappers) {
                 w.update(revision);
@@ -39,34 +50,33 @@ abstract class Publisher<S> {
 
     Wrapper subscribe(S subscriber) {
 
-        int currentRevision = revision.get();
+        C currentValue = getValue(holder);
         Wrapper wrapper = new Wrapper(subscriber);
-        wrapper.update(currentRevision);
+        wrapper.update(currentValue);
 
         wrappers.add(wrapper);
 
-        wrapper.update(revision.get());
+        wrapper.update(getValue(holder));
 
         return wrapper;
     }
 
-
-    abstract void notifySubscriber(int revision, Wrapper wrapper);
+    abstract void notifySubscriber(C value, Wrapper wrapper);
 
     class Wrapper implements Removable {
 
         private final S subscriber;
-        private final AtomicInteger revision;
+        private final H holder;
 
         Wrapper(S subscriber) {
             this.subscriber = subscriber;
-            this.revision = new AtomicInteger(initialRevision);
+            this.holder = initHolder();
         }
 
-        void update(int revision) {
-            int old = this.revision.getAndSet(revision);
-            if (old != revision) {
-                notifySubscriber(revision, this);
+        void update(C value) {
+            C old = getAndSet(holder, value);
+            if (old != value) {
+                notifySubscriber(value, this);
             }
         }
 
