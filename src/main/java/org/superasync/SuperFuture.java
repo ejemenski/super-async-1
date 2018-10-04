@@ -73,8 +73,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
         StateHolder stateHolder = publisher.getValue();
         switch (stateHolder.state) {
             case SET:
-                //noinspection unchecked
-                return (V) stateHolder.getResult();
+                return stateHolder.getResult();
             case EXCEPTIONAL:
                 throw new ExecutionException(stateHolder.getException());
             case CANCELLED:
@@ -116,7 +115,7 @@ public class SuperFuture<V> implements Future<V>, Completable.Cancellable {
                     observer.onResult((V) stateHolder.getResult());
                     break;
                 case EXCEPTIONAL:
-                    observer.onError(stateHolder.getException());
+                    observer.onError((Throwable) stateHolder.getException());
                     break;
             }
             wrapper.remove();
