@@ -27,7 +27,7 @@ abstract class Publisher<C, H, S> {
 
     boolean publish(C value) {
         C old = getAndSet(holder, value);
-        return onPublishRevision(old, value);
+        return onPublish(old, value);
     }
 
     boolean compareAndPublish(C expect, C revision) {
@@ -35,10 +35,10 @@ abstract class Publisher<C, H, S> {
             return false;
         }
 
-        return onPublishRevision(expect, revision);
+        return onPublish(expect, revision);
     }
 
-    private boolean onPublishRevision(C old, C revision) {
+    private boolean onPublish(C old, C revision) {
         if (old != revision) {
             for (Wrapper w : wrappers) {
                 w.update(revision);
