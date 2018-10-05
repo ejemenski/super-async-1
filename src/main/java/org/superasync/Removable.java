@@ -1,5 +1,5 @@
 package org.superasync;
 
 interface Removable {
-    void remove();
+  void remove();
 }

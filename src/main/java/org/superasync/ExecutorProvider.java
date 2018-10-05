@@ -3,13 +3,13 @@ package org.superasync;
 import java.util.concurrent.Executor;
 
 public interface ExecutorProvider {
-    Executor io();
+  Executor io();
 
-    Executor sequential();
+  Executor sequential();
 
-    Executor computation();
+  Executor computation();
 
-    Executor defaultObserving();
+  Executor defaultObserving();
 
-    Scheduler scheduler();
+  Scheduler scheduler();
 }

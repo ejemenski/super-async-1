@@ -1,5 +1,5 @@
 package org.superasync;
 
 interface Cancellable {
-    boolean cancel(boolean mayInterruptIfRunning);
+  boolean cancel(boolean mayInterruptIfRunning);
 }
